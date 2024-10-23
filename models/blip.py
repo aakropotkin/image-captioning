@@ -20,12 +20,14 @@ import torch.nn.functional as F
 import os
 from urllib.parse import urlparse
 from timm.models.hub import download_cached_file
+from pathlib import Path
 
 
 class BLIP_Base(nn.Module):
+    config_path = ( Path( __file__ ).parent.parent.resolve() / 'configs' / 'med_config.json' ).as_posix()
     def __init__(
         self,
-        med_config="configs/med_config.json",
+        med_config=config_path,
         image_size=224,
         vit="base",
         vit_grad_ckpt=False,
@@ -92,7 +94,7 @@ class BLIP_Base(nn.Module):
 class BLIP_Decoder(nn.Module):
     def __init__(
         self,
-        med_config="configs/med_config.json",
+        med_config=( Path( __file__ ).parent.parent.resolve() / 'configs' / 'med_config.json' ).as_posix(),
         image_size=384,
         vit="base",
         vit_grad_ckpt=False,
@@ -278,15 +280,15 @@ def is_url(url_or_filename):
 
 
 def load_checkpoint(model, url_or_filename):
-    if is_url(url_or_filename):
-        cached_file = download_cached_file(
-            url_or_filename, check_hash=False, progress=True
-        )
-        checkpoint = torch.load(cached_file, map_location="cpu")
-    elif os.path.isfile(url_or_filename):
-        checkpoint = torch.load(url_or_filename, map_location="cpu")
-    else:
-        raise RuntimeError("checkpoint url or path is invalid")
+    #if is_url(url_or_filename):
+    #    cached_file = download_cached_file(
+    #        url_or_filename, check_hash=False, progress=True
+    #    )
+    #    checkpoint = torch.load(cached_file, map_location="cpu")
+    #elif os.path.isfile(url_or_filename):
+    checkpoint = torch.load(url_or_filename, map_location="cpu")
+    #else:
+    #    raise RuntimeError("checkpoint url or path is invalid")
 
     state_dict = checkpoint["model"]
 
@@ -303,5 +305,5 @@ def load_checkpoint(model, url_or_filename):
                 del state_dict[key]
 
     msg = model.load_state_dict(state_dict, strict=False)
-    print("load checkpoint from %s" % url_or_filename)
+    #print("load checkpoint from %s" % url_or_filename)
     return model, msg

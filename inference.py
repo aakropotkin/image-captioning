@@ -1,6 +1,8 @@
+import os.path
 import utils
 import torch
 from pathlib import Path
+import sys
 
 from models.blip import blip_decoder
 from tqdm import tqdm
@@ -14,10 +16,16 @@ def init_parser(**parser_kwargs):
     :return: The parser object is being returned.
     """
     parser = argparse.ArgumentParser(description="Image caption CLI")
-    parser.add_argument("-i", "--input", help="Input directoryt path, such as ./images")
-    parser.add_argument("-b", "--batch", help="Batch size", default=1, type=int)
     parser.add_argument(
-        "-p", "--paths", help="A any.txt files contains all image paths."
+      "input",
+      help="Input path, such as ./images.png or ./imgs-dir/"
+    )
+    parser.add_argument(
+      "-e",
+      "--ext",
+      type=str,
+      default='caption',
+      help='file extension to use when saving captions'
     )
     parser.add_argument(
         "-g",
@@ -36,56 +44,42 @@ def init_model():
     :return: The model is being returned.
     """
 
-    print("Checkpoint loading...")
+    print("Checkpoint loading...", file=sys.stderr)
+    model_path = Path( __file__ ).parent.resolve() / 'checkpoints' / 'model_large_caption.pth'
     model = blip_decoder(
-        pretrained="./checkpoints/model_large_caption.pth", image_size=384, vit="large"
+        pretrained=model_path,
+        image_size=384,
+        vit="large"
     )
     model.eval()
     model = model.to(device)
-    print(f"\nModel to {device}")
+    print(f"\nModel to {device}", file=sys.stderr)
     return model
 
 
 if __name__ == "__main__":
-
     parser = init_parser()
     opt = parser.parse_args()
 
     device = torch.device(f"cuda:{opt.gpu_id}" if torch.cuda.is_available() else "cpu")
-    print(f'Device: {device}')
-    if opt.paths:  # If filepath.txt file does not exists
-        with open("filepaths.txt", "r") as file:
-            list_of_images = file.read().split("\n")
-    else:
-        list_of_images = utils.read_images_from_directory(opt.input)
+    print(f'Device: {device}', file=sys.stderr)
 
-    # Batch processing
-    split_size = len(list_of_images) // opt.batch
-    print(f"Split size: {split_size}")
-    batches = np.array_split(list_of_images, split_size)
+    model_path = Path( __file__ ).parent.resolve() / 'checkpoints' / 'model_large_caption.pth'
 
-    if not Path("checkpoints").is_dir():
-        print(f"checkpoint directory did not found.")
-        utils.create_dir("checkpoints")
+    if not model_path.parent.is_dir():
+        print(f"checkpoint directory not found.")
+        utils.create_dir(model_path.parent)
 
-    if not Path("checkpoints/model_large_caption.pth").is_file():
+    if not model_path.is_file():
         utils.download_checkpoint()
 
     model = init_model()
     with torch.no_grad():
-        print("Inference started")
-        for batch_idx, batch in tqdm(enumerate(batches), unit="batch"):
-            pil_images = utils.read_with_pil(batch)
-            transformed_images = utils.prep_images(pil_images, device)
-
-            if not Path("captions").is_dir():
-                print(f"captions directory did not found.")
-                utils.create_dir("captions")
-                 
-            with open(f"captions/{batch_idx}_captions.txt", "w+") as file:
-                for path, image in zip(batch, transformed_images):
-
-                    caption = model.generate(
-                        image, sample=False, num_beams=3, max_length=20, min_length=5
-                    )
-                    file.write(path + ", " + caption[0] + "\n")
+        print("Inference started", file=sys.stderr)
+        pil_images = utils.read_with_pil([opt.input])
+        transformed_images = utils.prep_images(pil_images, device)
+        image = transformed_images[0]
+        caption = model.generate(
+          image, sample=False, num_beams=3, max_length=77, min_length=5
+        )
+        print(caption[0])
